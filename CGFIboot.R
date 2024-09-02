@@ -1,4 +1,5 @@
 # Load necessary libraries
+install.packages("gridExtra")
 library(lavaan)
 library(ggplot2)
 library(gridExtra)
