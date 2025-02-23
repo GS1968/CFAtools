@@ -5,18 +5,25 @@ library(ggplot2)
 library(gridExtra)
 
 # Function to perform CFA with non-parametric bootstrapping and variability analysis
-perform_cfa_with_bootstrap <- function(data, model, estimator = "ML", data_type = "continuous", n_bootstrap = 1000) {
+perform_cfa_with_bootstrap <- function(data, model, estimator = "ML", 
+                                       data_type = "continuous", 
+                                       ordered_vars = NULL, 
+                                       dichotomous_vars = NULL,
+                                       n_bootstrap = 1000) {
   
-  # Check the data type and set the appropriate lavOptions
-  if (data_type == "ordered") {
-    data <- as.data.frame(lapply(data, as.ordered))  # Convert all variables to ordered factors
-  } else if (data_type == "dichotomous") {
-    data <- as.data.frame(lapply(data, as.numeric))  # Convert all variables to numeric
+  # Ensure ordered variables are treated correctly
+  if (data_type == "ordered" & !is.null(ordered_vars)) {
+    data[ordered_vars] <- lapply(data[ordered_vars], factor, ordered = TRUE)
   }
   
-  # Fit the CFA model on the original data
-  fit <- cfa(model, data = data, estimator = estimator)
+  # Ensure dichotomous variables are treated correctly
+  if (data_type == "dichotomous" & !is.null(dichotomous_vars)) {
+    data[dichotomous_vars] <- lapply(data[dichotomous_vars], as.numeric)  # Convert to numeric
+  }
   
+  # Fit the CFA model with correctly specified ordered variables
+  fit <- cfa(model, data = data, estimator = estimator, ordered = ordered_vars)
+
   # Extract fit indices from the original model
   fit_indices <- fitMeasures(fit, c("chisq", "df", "pvalue", "cfi", "tli", "gfi", "agfi", "rmsea", "srmr", "aic", "bic"))
   
@@ -28,10 +35,12 @@ perform_cfa_with_bootstrap <- function(data, model, estimator = "ML", data_type 
   CGFI <- GFI + (2 * (1 - (2 * dfT / (k * (k + 1)))) / N)
   
   # Initialize lists to store bootstrap fit indices
-  bootstrap_fit_indices <- list(chisq = numeric(n_bootstrap), df = numeric(n_bootstrap), pvalue = numeric(n_bootstrap),
-                                cfi = numeric(n_bootstrap), tli = numeric(n_bootstrap), gfi = numeric(n_bootstrap),
-                                agfi = numeric(n_bootstrap), rmsea = numeric(n_bootstrap), srmr = numeric(n_bootstrap),
-                                aic = numeric(n_bootstrap), bic = numeric(n_bootstrap), cgfi = numeric(n_bootstrap))
+  bootstrap_fit_indices <- list(
+    chisq = numeric(n_bootstrap), df = numeric(n_bootstrap), pvalue = numeric(n_bootstrap),
+    cfi = numeric(n_bootstrap), tli = numeric(n_bootstrap), gfi = numeric(n_bootstrap),
+    agfi = numeric(n_bootstrap), rmsea = numeric(n_bootstrap), srmr = numeric(n_bootstrap),
+    aic = numeric(n_bootstrap), bic = numeric(n_bootstrap), cgfi = numeric(n_bootstrap)
+  )
   
   # Perform bootstrapping
   for (i in 1:n_bootstrap) {
@@ -39,7 +48,7 @@ perform_cfa_with_bootstrap <- function(data, model, estimator = "ML", data_type 
     bootstrap_sample <- data[sample(1:N, replace = TRUE), ]
     
     # Fit the CFA model on the bootstrap sample
-    bootstrap_fit <- cfa(model, data = bootstrap_sample, estimator = estimator)
+    bootstrap_fit <- cfa(model, data = bootstrap_sample, estimator = estimator, ordered = ordered_vars)
     
     # Extract fit indices from the bootstrap model
     bootstrap_fit_indices$chisq[i] <- fitMeasures(bootstrap_fit, "chisq")
@@ -96,15 +105,7 @@ perform_cfa_with_bootstrap <- function(data, model, estimator = "ML", data_type 
       geom_vline(aes(xintercept = quantile(data, 0.025, na.rm = TRUE)), linetype = "dashed", color = "black", size = 1) +  # 2.5% CI line
       geom_vline(aes(xintercept = quantile(data, 0.975, na.rm = TRUE)), linetype = "dashed", color = "black", size = 1) +  # 97.5% CI line
       geom_vline(aes(xintercept = mean(data, na.rm = TRUE)), color = "blue", size = 1) +  # Mean line
-      theme_minimal() +
-      theme(axis.title.x = element_blank(),  # Remove x-axis title
-            axis.title.y = element_blank(),  # Remove y-axis title
-            plot.title = element_text(hjust = 0.5, face = "bold"),  # Center and bold title
-            axis.text = element_text(face = "bold"),  # Bold axis text
-            axis.text.x = element_text(hjust = 0.5, face = "bold"),  # Center and bold x-axis labels
-            axis.text.y = element_text(face = "bold"),  # Bold y-axis labels
-            panel.grid.major = element_line(size = 0.8),  # Thicker grid lines
-            panel.grid.minor = element_line(size = 0.6))  # Thicker minor grid lines
+      theme_minimal()
   }
   
   # Define colors for the plots
